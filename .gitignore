@@ -1,0 +1,42 @@
+# Python derleme çıktıları
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Sanal ortamlar
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Paketleme / dağıtım dosyaları
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Test çıktıları
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# IDE dosyaları
+.vscode/
+.idea/
+
+# Geçici dosyalar
+*.log
+*.tmp
+*.bak
+
+# Mac / Linux özel
+.DS_Store
+Thumbs.db

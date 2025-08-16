@@ -1,0 +1,12 @@
+:store { name, address:address }
+:address { country, city, town }
+
+:ist { "Türkiye", "Istanbul", "Maltepe" }
+:ank { "Türkiye", "Ankara", "Beypazarı" }
+
+[
+  { "TeknoMarket", ist },
+  { "Kitap Dünyası", ist },
+  { "Lezzet Durağı", ank },
+  { "Moda Giyim", ank }
+]: store

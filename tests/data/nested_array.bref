@@ -1,0 +1,9 @@
+:artist { name, country }
+:album { title, year, artists:artist }
+
+{ "A Night at the Opera", 1975,
+  [
+    { "Freddie Mercury", "UK" },
+    { "Brian May", "UK" }
+  ]: artist
+}: album
