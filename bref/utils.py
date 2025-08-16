@@ -41,8 +41,13 @@ def parse_schema_fields(text: str) -> Schema:
                     default_val = tname[1:-1]
                     fields.append((key, default_val))
                 else:
-                    # Type reference: artist:artist
-                    fields.append((key, tname))
+                    # Type reference: artist:artist veya album:album
+                    # Eğer tname bir identifier ise (sadece harf/rakam/underscore içeriyorsa) type reference
+                    if tname.replace('_', '').isalnum():
+                        fields.append((key, tname))  # Type reference
+                    else:
+                        # Diğer durumlar için string olarak kabul et
+                        fields.append((key, tname))
         else:
             fields.append(p)
     return fields

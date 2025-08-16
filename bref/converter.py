@@ -8,9 +8,9 @@ from .utils import parse_type_definitions, parse_schema_fields, Schema, SchemaFi
 
 @dataclass
 class Node:
-    """AST düğümü: primitive | list(tuple-vari) | array"""
-    kind: str  # "primitive" | "list" | "array"
-    value: Any  # primitive için python değeri; list/array için List[Node]
+    """AST düğümü: primitive | list(tuple-vari) | array | default"""
+    kind: str  # "primitive" | "list" | "array" | "default"
+    value: Any  # primitive için python değeri; list/array için List[Node]; default için None
     type_ann: Optional[Union[str, Schema]] = None  # "song" veya inline şema listesi
 
 
@@ -63,10 +63,10 @@ class Parser:
             return Node("primitive", None)
         if ident is not None:
             return Node("primitive", ident)
-        # default value (.)
+        # default value (.) - schema'daki default değeri kullan
         if ch == '.':
             self.get()  # . karakterini tüket
-            return Node("primitive", "DEFAULT")
+            return Node("default", None)  # default node olarak işaretle
         
         # value definition reference (identifier)
         if ch.isalpha() or ch == '_':
@@ -295,56 +295,89 @@ class Materializer:
 
     def _map_list_to_object(self, items: List[Node], schema: Schema) -> Dict[str, Any]:
         result: Dict[str, Any] = {}
-        schema_idx = 0
         
-        for item in items:
-            if item.kind == "key_value":
-                # Key-value pair: (key, value)
+        # Önce key-value pair'ları işle
+        key_value_items = [item for item in items if item.kind == "key_value"]
+        positional_items = [item for item in items if item.kind != "key_value"]
+        
+        # Eğer sadece key-value pair'lar varsa, positional default değerleri ekleme
+        if key_value_items and not positional_items:
+            for item in key_value_items:
                 key, value_node = item.value
                 result[key] = self.build(value_node, None)
-            else:
-                # Normal value - schema'ya göre map et
-                if schema_idx < len(schema):
-                    field = schema[schema_idx]
-                    # DEFAULT node kontrolü
-                    if (isinstance(item, Node) and 
-                        item.kind == "primitive" and 
-                        item.value == "DEFAULT"):
-                        # Default value kullan
-                        if isinstance(field, tuple):
-                            key, sub_t = field
-                            if isinstance(sub_t, (bool, int, float, str, type(None))):
-                                result[key] = sub_t
-                            else:
-                                result[key] = None
-                        else:
-                            result[field] = None
-                    else:
-                        # Normal value
-                        if isinstance(field, tuple):
-                            key, sub_t = field
-                            result[key] = self.build(item, sub_t)
-                        else:
-                            result[field] = self.build(item, None)
-                    schema_idx += 1
-                else:
-                    # Schema'dan fazla item var - key-value pair olarak ekle
-                    if item.kind == "key_value":
-                        key, value_node = item.value
-                        result[key] = self.build(value_node, None)
+            return result
         
-        # Eksik schema field'ları için default value kullan
+        # Key-value pair'ları ekle
+        for item in key_value_items:
+            key, value_node = item.value
+            result[key] = self.build(value_node, None)
+        
+        # Sonra positional value'ları schema'ya göre map et
+        schema_idx = 0
+        
+        for item in positional_items:
+            if schema_idx < len(schema):
+                field = schema[schema_idx]
+                # DEFAULT node kontrolü
+                if (isinstance(item, Node) and 
+                    item.kind == "default"):
+                    # Default value kullan
+                    if isinstance(field, tuple):
+                        key, sub_t = field
+                        if isinstance(sub_t, (bool, int, float, str, type(None))):
+                            result[key] = sub_t
+                        else:
+                            result[key] = None
+                    else:
+                        result[field] = None
+                else:
+                    # Normal value
+                    if isinstance(field, tuple):
+                        key, sub_t = field
+                        # Eğer sub_t bir default değer ise (sayı, string, boolean, null) direkt kullan
+                        if isinstance(sub_t, (bool, int, float, type(None))):
+                            result[key] = sub_t
+                        elif isinstance(sub_t, str):
+                            # String olabilir ama tip adı da olabilir
+                            # Eğer sub_t tip adı ise (type_defs'de varsa) build çağrısı yap
+                            if sub_t in self.type_defs:
+                                # Type reference - build çağrısı yap
+                                result[key] = self.build(item, sub_t)
+                            else:
+                                # String default değer - direkt kullan
+                                result[key] = sub_t
+                        else:
+                            # Type reference ise build çağrısı yap
+                            result[key] = self.build(item, sub_t)
+                    else:
+                        result[field] = self.build(item, None)
+                schema_idx += 1
+        
+        # Eksik positional field'lar için default değerleri ekle (sadece default değer varsa)
         while schema_idx < len(schema):
             field = schema[schema_idx]
             if isinstance(field, tuple):
                 key, sub_t = field
+                # Sadece default değer varsa ekle
                 if isinstance(sub_t, (bool, int, float, str, type(None))):
                     result[key] = sub_t
-                else:
-                    result[key] = None
+                # Default değer yoksa ekleme
             else:
-                result[field] = None
+                # Basit field - default değer yok, ekleme
+                pass
             schema_idx += 1
+        
+        # Eksik tüm field'lar için default değerleri ekle (sadece default değer varsa)
+        for field in schema:
+            if isinstance(field, tuple):
+                key, sub_t = field
+                # Eğer bu field henüz eklenmemişse ve default değeri varsa ekle
+                if key not in result and isinstance(sub_t, (bool, int, float, str, type(None))):
+                    result[key] = sub_t
+            else:
+                # Basit field - eğer henüz eklenmemişse None olarak ekle
+                if field not in result:
+                    result[field] = None
         
         return result
 
