@@ -1,0 +1,2 @@
+:song { title, duration, streams, is_favorite }
+{ "Bohemian Rhapsody", "5:55", 1980000000, true }: song

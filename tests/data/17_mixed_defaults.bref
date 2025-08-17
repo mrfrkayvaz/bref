@@ -1,13 +1,11 @@
 :song { title, duration, genre, album:album, streams, is_favorite }
 :album { title: "test", year: 2020, band:band }
 :band { name: "band default", country }
-
-:band_value { "Queen", "UK" }
-
+ 
 [
   {
     "Bohemian Rhapsody", "5:55", "Rock",
-    { "A Night at the Opera", 1975, band_value },
+    { "A Night at the Opera", 1975, { "Queen", "UK" } },
     1980000000, true
   },
   {

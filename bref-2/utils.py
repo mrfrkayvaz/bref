@@ -1,7 +1,12 @@
 import re
 from typing import Dict, List, Tuple, Union, Any
+from enum import Enum
 
-SchemaField = Union[str, Tuple[str, str]]
+class FieldType(Enum):
+    TYPE_REFERENCE = "type_reference"
+    DEFAULT_VALUE = "default_value"
+
+SchemaField = Union[str, Tuple[str, str, FieldType]]
 Schema = List[SchemaField]
 
 def parse_schema_fields(text: str) -> Schema:
@@ -31,23 +36,23 @@ def parse_schema_fields(text: str) -> Schema:
                 if tname.lower() in ('true', 'false', 'null'):
                     # Boolean veya null default value
                     default_val = None if tname.lower() == 'null' else tname.lower() == 'true'
-                    fields.append((key, default_val))
+                    fields.append((key, default_val, FieldType.DEFAULT_VALUE))
                 elif tname.replace('.', '').replace('-', '').isdigit():
                     # Numeric default value
                     default_val = float(tname) if '.' in tname else int(tname)
-                    fields.append((key, default_val))
+                    fields.append((key, default_val, FieldType.DEFAULT_VALUE))
                 elif tname.startswith('"') and tname.endswith('"'):
                     # String default value
                     default_val = tname[1:-1]
-                    fields.append((key, default_val))
+                    fields.append((key, default_val, FieldType.DEFAULT_VALUE))
                 else:
                     # Type reference: artist:artist veya album:album
                     # Eğer tname bir identifier ise (sadece harf/rakam/underscore içeriyorsa) type reference
                     if tname.replace('_', '').isalnum():
-                        fields.append((key, tname))  # Type reference
+                        fields.append((key, tname, FieldType.TYPE_REFERENCE))  # Type reference
                     else:
                         # Diğer durumlar için string olarak kabul et
-                        fields.append((key, tname))
+                        fields.append((key, tname, FieldType.DEFAULT_VALUE))
         else:
             fields.append(p)
     return fields
@@ -98,15 +103,11 @@ def parse_type_definitions(content: str) -> Tuple[Dict[str, Schema], Dict[str, L
     # Type definition pattern: :name { field1, field2:type, ... }
     type_pattern = re.compile(r'^\s*:(?P<name>[A-Za-z_]\w*)\s*(?P<body>\{[^}]*\})\s*$')
     
-    # Value definition pattern: :name { "value1", "value2", ... }
-    value_pattern = re.compile(r'^\s*:(?P<name>[A-Za-z_]\w*)\s*(?P<body>\{[^}]*\})\s*$')
-
     for line in content.splitlines():
         line = line.strip()
         if not line:
             continue
             
-        # Önce type definition olarak dene
         m = type_pattern.match(line)
         if m:
             name = m.group("name")
@@ -119,13 +120,10 @@ def parse_type_definitions(content: str) -> Tuple[Dict[str, Schema], Dict[str, L
             has_quoted_values = any(part.startswith('"') for part in parts)
             
             if has_field_type_format:
-                # Type definition (field:type formatı var)
                 type_defs[name] = parse_schema_fields(body)
             elif has_quoted_values:
-                # Value definition (tırnaklı değerler var)
                 value_defs[name] = parse_value_definition(body)
             else:
-                # Belirsiz durum - varsayılan olarak type definition kabul et
                 type_defs[name] = parse_schema_fields(body)
         else:
             remaining_lines.append(line)

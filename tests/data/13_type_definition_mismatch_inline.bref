@@ -1,0 +1,20 @@
+:song { title, duration, genre, album:album, streams, is_favorite }
+:album { title, year, band:band }
+:band { name, country }
+:special_song { release_date, awards, producer }
+ 
+[
+  {
+    "Bohemian Rhapsody", "5:55", "Rock",
+    { "A Night at the Opera", 1975, { "Queen", "UK" } },  
+    1980000000, true
+  },
+  {
+    "Smells Like Teen Spirit", "5:01", "Alternative Rock",
+    { "Nevermind", 1991, { "Nirvana", "USA" } },
+    1750000000, true
+  },
+  {
+    "1973-03-01", ["Grammy Hall of Fame", "UK Music Hall of Fame"], "Roy Thomas Baker"
+  }: special_song
+]: song
