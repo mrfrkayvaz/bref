@@ -496,3 +496,14 @@ The main logic is as follows:
   }
 ]
 ```
+
+### Task 3
+
+Our `parse` function already converts a given Bref string into Python data structures (`dict` / `list`).  
+
+Now the goal is to update the implementation of `bref.toJSON`.  
+
+- The incoming Bref string should first be passed through the `parse` function.  
+- Then, the resulting Python structure should be converted into a JSON string (using `json.dumps`).  
+
+In short: **Bref string → `parse()` → Python dict/list → JSON string**.

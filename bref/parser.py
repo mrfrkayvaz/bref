@@ -1,16 +1,74 @@
 import re
 from typing import Dict, List, Tuple, Union, Any
+from enum import Enum
 
-
-class FieldType:
+class FieldType(Enum):
     OBJECT = "object"
     ARRAY = "array"
+
+def parse_schema_fields(text: str) -> List[Union[str, Tuple[str, str, FieldType]]]:
+    """
+    Parse schema fields from type definition body.
+    Example: '{ title, year, artist:artist, tracks:track[] }'
+    Returns: ["title", "year", ("artist", "artist", FieldType.OBJECT), ("tracks", "track", FieldType.ARRAY)]
+    """
+    inner = text.strip()
+    if inner.startswith("{") and inner.endswith("}"):
+        inner = inner[1:-1]
+
+    parts = [p.strip() for p in inner.split(",") if p.strip()]
+    fields = []
+    
+    for part in parts:
+        if ":" in part:
+            key, type_name = part.split(":", 1)
+            key = key.strip()
+            type_name = type_name.strip()
+            
+            # Check for array type: tracks:track[]
+            if type_name.endswith("[]"):
+                base_type = type_name[:-2]
+                fields.append((key, base_type, FieldType.ARRAY))
+            else:
+                # Regular type reference
+                fields.append((key, type_name, FieldType.OBJECT))
+        else:
+            fields.append(part)
+    
+    return fields
+
+
+def parse_type_definitions(content: str) -> Tuple[Dict[str, List], str]:
+    """
+    Parse type definitions from BREF content.
+    Example: ':song { title, duration, genre, album:album, streams, is_favorite }'
+    Returns: (type_defs, remaining_content)
+    """
+    type_defs = {}
+    remaining_lines = []
+    
+    # Type definition pattern: :name { field1, field2:type, ... }
+    type_pattern = re.compile(r'^\s*:(?P<name>[A-Za-z_]\w*)\s*(?P<body>\{[^}]*\})\s*$')
+    
+    for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+            
+        match = type_pattern.match(line)
+        if match:
+            name = match.group("name")
+            body = match.group("body")
+            type_defs[name] = parse_schema_fields(body)
+        else:
+            remaining_lines.append(line)
+    
+    return type_defs, "\n".join(remaining_lines).strip()
 
 
 def parse_value(value_str: str) -> Any:
     """
     Parse a single value from BREF format to Python type.
-    Handles strings, numbers, booleans, null, and nested objects/arrays.
     """
     value_str = value_str.strip()
     
@@ -56,17 +114,22 @@ def parse_object(obj_str: str, type_defs: Dict = None, current_type: str = None)
     if inner.startswith("{") and inner.endswith("}"):
         inner = inner[1:-1]
     
-    # Split by commas, but handle nested braces
+    # Split by commas, but handle nested braces and brackets
     parts = []
     current_part = ""
     brace_count = 0
+    bracket_count = 0
     
     for char in inner:
         if char == '{':
             brace_count += 1
         elif char == '}':
             brace_count -= 1
-        elif char == ',' and brace_count == 0:
+        elif char == '[':
+            bracket_count += 1
+        elif char == ']':
+            bracket_count -= 1
+        elif char == ',' and brace_count == 0 and bracket_count == 0:
             parts.append(current_part.strip())
             current_part = ""
             continue
@@ -80,16 +143,38 @@ def parse_object(obj_str: str, type_defs: Dict = None, current_type: str = None)
     if current_type and current_type in type_defs:
         # Use type definition to map values to keys
         schema = type_defs[current_type]
-        values = [parse_value(part) for part in parts if part.strip()]
+        values = []
         
+        # Parse each part with proper handling of nested objects/arrays
+        for part in parts:
+            if part.strip():
+                if part.startswith('{') and part.endswith('}'):
+                    # Nested object - need to find its type
+                    values.append(part)
+                elif part.startswith('[') and part.endswith(']'):
+                    # Nested array - need to find its type
+                    values.append(part)
+                else:
+                    # Simple value
+                    values.append(parse_value(part))
+        
+        # Map values to schema fields
         for i, field in enumerate(schema):
             if i < len(values):
                 if isinstance(field, tuple):
                     key, field_type, field_type_enum = field
                     if field_type_enum == FieldType.OBJECT:
-                        result[key] = values[i]
+                        # Parse nested object with its type definition
+                        if isinstance(values[i], str) and values[i].startswith('{') and values[i].endswith('}'):
+                            result[key] = parse_object(values[i], type_defs, field_type)
+                        else:
+                            result[key] = values[i]
                     elif field_type_enum == FieldType.ARRAY:
-                        result[key] = values[i]
+                        # Parse nested array with its element type
+                        if isinstance(values[i], str) and values[i].startswith('[') and values[i].endswith(']'):
+                            result[key] = parse_array(values[i], type_defs, field_type)
+                        else:
+                            result[key] = values[i]
                     else:
                         result[key] = values[i]
                 else:
@@ -145,10 +230,20 @@ def parse_array(arr_str: str, type_defs: Dict = None, element_type: str = None) 
                 # Parse with type definition
                 if part.startswith('{') and part.endswith('}'):
                     result.append(parse_object(part, type_defs, element_type))
+                elif part.startswith('[') and part.endswith(']'):
+                    result.append(parse_array(part, type_defs, element_type))
                 else:
                     result.append(parse_value(part))
             else:
-                result.append(parse_value(part))
+                # No element type specified, try to parse as best as possible
+                if part.startswith('{') and part.endswith('}'):
+                    # Try to parse as object without type definition
+                    result.append(parse_object(part, type_defs))
+                elif part.startswith('[') and part.endswith(']'):
+                    # Try to parse as array without type definition
+                    result.append(parse_array(part, type_defs))
+                else:
+                    result.append(parse_value(part))
     
     return result
 

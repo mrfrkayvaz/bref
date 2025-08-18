@@ -57,14 +57,14 @@ print(result)
 ### Command Line Interface
 
 ```bash
-# Parse a file
+# Parse a file and output JSON
 bref input.bref
 
-# Parse and output as JSON
-bref input.bref --format json --pretty
+# Pretty print JSON output
+bref input.bref --pretty
 
-# Parse and save to file
-bref input.bref -o output.json --format json
+# Save JSON to file
+bref input.bref -o output.json
 
 # Parse from stdin
 echo ':song { title } { "Test Song" }: song' | bref
