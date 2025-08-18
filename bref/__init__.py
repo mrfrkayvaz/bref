@@ -1,4 +1,3 @@
-from .converter import parse_bref
+from .converter import parse, toJSON, toBREF
 
-def toJSON(content: str):
-    return parse_bref(content)
+__all__ = ['parse', 'toJSON', 'toBREF']

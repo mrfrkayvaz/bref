@@ -1,7 +1,8 @@
 # Bref Python Parser
 
 This document describes the development of a Python parser for the Bref data format.
-The parser should read data in Bref format and produce standard JSON output.
+The parser should read data in Bref format and produce standard Python structures: arrays are converted into lists, and objects are converted into dictionaries.
+To help you understand the Bref format, I provide the corresponding JSON representations under the code examples.
 
 ## Goals
 
@@ -135,64 +136,26 @@ Multiple objects can be grouped into an array using square brackets. A type labe
 ]
 ```
 
-### Value definitions
-
-Bref also supports defining reusable values, which can then be referenced multiple times. This helps avoid repetition.
+If you want to define an array inside an object, you can specify it like this:
 
 **Bref**
 
 ```json
-:store { name, address:address }
-:address { country, city, town }
-
-:ist { "Türkiye", "Istanbul", "Maltepe" }
-:ank { "Türkiye", "Ankara", "Beypazarı" }
-
-[
-  { "TeknoMarket", ist },
-  { "Kitap Dünyası", ist },
-  { "Lezzet Durağı", ank },
-  { "Moda Giyim", ank }
-]: store
-```
-
-**JSON**
-
-```json
+:song { title, duration, genre, album:album, streams, is_favorite }
+:album { title, year, band:band, tracks:track[] } 
+:band { name, country }
+:track { title }
+ 
 [
   {
-    "name": "TeknoMarket",
-    "address": {
-      "country": "Türkiye",
-      "city": "Istanbul",
-      "town": "Maltepe"
-    }
-  },
-  {
-    "name": "Kitap Dünyası",
-    "address": {
-      "country": "Türkiye",
-      "city": "Istanbul",
-      "town": "Maltepe"
-    }
-  },
-  {
-    "name": "Lezzet Durağı",
-    "address": {
-      "country": "Türkiye",
-      "city": "Ankara",
-      "town": "Beypazarı"
-    }
-  },
-  {
-    "name": "Moda Giyim",
-    "address": {
-      "country": "Türkiye",
-      "city": "Ankara",
-      "town": "Beypazarı"
-    }
+    "Bohemian Rhapsody", "5:55", "Rock",
+    { 
+      "A Night at the Opera", 1975, { "Queen", "UK" }, 
+      [ { "Love of My Life" }, { "You're My Best Friend" } ] 
+    },
+    1980000000, true
   }
-]
+]: song
 ```
 
 ### Full JSON data type support
@@ -202,13 +165,13 @@ Bref supports all JSON-compatible data types: booleans (`true`, `false`), null v
 **Bref**
 
 ```json
-:person { name, age, height, is_active, email, preferences, scores }
+:person { name, age, height, is_active, email, preferences:preferences, scores }
 :preferences { theme, language }
 
 [
-  { "John Doe", 30, 175.5, true, null, { "dark", "en" }: preferences, [ 85, 92, 78 ] },
-  { "Jane Smith", 25, 162.0, false, "jane@example.com", { "light", "tr" }: preferences, [ 95, 88, 91 ] },
-  { "Bob Wilson", 35, 180.2, true, null, { "auto", "de" }: preferences, [ 72, 85, 90 ] }
+  { "John Doe", 30, 175.5, true, null, { "dark", "en" }, [ 85, 92, 78 ] },
+  { "Jane Smith", 25, 162.0, false, "jane@example.com", { "light", "tr" }, [ 95, 88, 91 ] },
+  { "Bob Wilson", 35, 180.2, true, null, { "auto", "de" }, [ 72, 85, 90 ] }
 ]: person
 ```
 
@@ -382,72 +345,9 @@ You can also inline override the array’s declared type by providing a differen
 
 This shows that even when the array is declared with `: song`, you can override specific entries with another type like `special_song`. This provides flexibility for heterogeneous arrays.
 
-### Default values
-
-Bref allows defining default values for type fields. These defaults are applied when the value is omitted in the data object.
-
-* For **scalars** (strings, numbers, booleans, null), defaults are declared explicitly, e.g. `title: "default title"` or `is_active: false`.
-* For **objects**, defaults are not defined inline at the field level. Instead, you specify the type (`album: album`) and the defaults come from the nested type’s definition. This ensures consistency across nested structures.
-* When using defaults inside data objects, the special `.` placeholder is used. This indicates that the default value for that field should be applied.
-
-**Bref**
-
-```json
-:song { title, duration, genre, album:album, streams: 20000, is_favorite: false }
-:album { title: "default album title", year, band:band }
-:band { name: "default band name", country }
-
-[
-  {
-    "Bohemian Rhapsody", "5:55", "Rock",
-    { "A Night at the Opera", 1975, { "Queen", "UK" } },  
-    1980000000, .
-  },
-  {
-    "Smells Like Teen Spirit", "5:01", "Alternative Rock",
-    ., ., .
-  }
-]: song
-```
-
-**JSON**
-
-```json
-[
-  {
-    "title": "Bohemian Rhapsody",
-    "duration": "5:55",
-    "genre": "Rock",
-    "album": {
-      "title": "A Night at the Opera",
-      "year": 1975,
-      "band": {
-        "name": "Queen",
-        "country": "UK"
-      }
-    },
-    "streams": 1980000000,
-    "is_favorite": false
-  },
-  {
-    "title": "Smells Like Teen Spirit",
-    "duration": "5:01",
-    "genre": "Alternative Rock",
-    "album": {
-      "title": "default album title",
-      "band": {
-        "name": "default band name"
-      }
-    },
-    "streams": 20000,
-    "is_favorite": false
-  }
-]
-```
-
 ### Missing data
 
-For missing values, no special symbol is used. Instead, fields are simply skipped by leaving consecutive commas. This means `,,` indicates that some fields are absent and should not be filled with defaults.
+For missing values, no special symbol is used. Instead, fields are simply skipped by leaving consecutive commas. This means `,,` indicates that some fields are absent.
 
 **Bref**
 
@@ -473,6 +373,126 @@ For missing values, no special symbol is used. Instead, fields are simply skippe
   {
     "title": "Unknown Song",
     "is_favorite": false
+  }
+]
+```
+
+## Project Structure
+
+The bref folder will be our working directory. Inside this folder, all operations will start from converter.py.
+
+There will be two main functions defined here:
+
+parse: this function converts a Bref string into Python dict and list objects.
+
+toJSON: this function will remain empty for now.
+
+toBREF: this function will remain empty for now.
+
+## Tasks
+
+You will go through these tasks step by step. I will assign a number to each task. Your job is to carefully understand the task, ask questions if anything is unclear, and if you are completely confident, proceed to implement it. Perform these implementations using Python.
+
+### Task 1
+
+The first task is to implement logic in the toJSON function that identifies three key components from the incoming Bref data:
+
+type_defs – stores all type definitions.
+
+At this stage, we are not processing actual data objects yet. The parser should first analyze type definitions before moving on to the data.
+
+**Bref**
+```json
+:song { title, duration, genre, album:album, streams, is_favorite }
+:album { title, year, band:band, tracks:track[] }
+:track { title, duration, genre }
+:band { name, country }
+```
+
+**Python**
+```python
+type_defs = {
+  "song": ["title", "duration", "genre", ("album", "album", FieldType.OBJECT), "streams", "is_favorite"],
+  "album": ["title", "year", ("band", "band"), ("tracks", "track", FieldType.ARRAY)],
+  "band": ["name", "country"]
+}
+```
+
+### Task 2
+
+In this task, our goal is to process the data using the type_defs definitions.
+
+When writing the code, make sure files do not become too long. If necessary, create new files. Each file should only contain functions related to its filename.
+
+The main logic is as follows:
+
+ - There should not be any item without a key definition. If such a case exists, the parser must raise an error.
+
+ - If the data is an object, the output should be a Python dict.
+
+ - If the data is an array, the output should be a Python list.
+
+**Bref**
+
+```json
+:song { title, duration, genre, album:album, streams, is_favorite }
+:album { title, year, band:band, tracks:track[] }
+:band { name, country }
+:track { title }
+
+[
+  {
+    "Bohemian Rhapsody", "5:55", "Rock",
+    { "A Night at the Opera", 1975, { "Queen", "UK" }, [{"track 1"}, {"track 2"}] },
+    1980000000, true
+  },
+  {
+    "Smells Like Teen Spirit", "5:01", "Alternative Rock",
+    { "A Night at the Opera", 1975, { "Queen", "UK" }, [{"track 1"}, {"track 2"}] },
+    300000, false
+  }
+]: song
+```
+
+```python
+[
+  {
+    "title": "Bohemian Rhapsody",
+    "duration": "5:55",
+    "genre": "Rock",
+    "album": {
+      "title": "A Night at the Opera",
+      "year": 1975,
+      "band": {
+        "title": "Queen",
+        "country": "UK"
+      },
+      "tracks": [
+        {"title": "track 1"},
+        {"title": "track 2"}
+      ]
+    },
+    "streams": 1980000000,
+    "is_favorite": True
+  },
+  {
+    "title": "Smells Like Teen Spirit",
+    "duration": "5:01",
+    "genre": "Alternative Rock",
+    "album": {
+      "title": "A Night at the Opera",
+      "year": 1975,
+      "band": {
+        "title": "Queen",
+        "country": "UK"
+      },
+      "tracks": [
+        {"title": "track 1"},
+        {"title": "track 2"}
+      ]
+    },
+    "streams": 300000,
+    "is_favorite": False
   }
 ]
 ```
