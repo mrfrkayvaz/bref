@@ -70,3 +70,43 @@ def toBREF(json_content: str) -> str:
     """
     # This function will remain empty for now as specified
     pass
+
+
+def validate_bref(bref_content: str) -> bool:
+    """
+    Validate BREF content without parsing it completely.
+    
+    Args:
+        bref_content (str): BREF format string content
+        
+    Returns:
+        bool: True if content appears to be valid BREF format
+        
+    Raises:
+        TypeError: If input is not a string
+    """
+    if not isinstance(bref_content, str):
+        raise TypeError("bref_content must be a string")
+    
+    if not bref_content.strip():
+        return False
+    
+    # Basic validation: check for type definitions
+    lines = bref_content.splitlines()
+    has_type_def = any(line.strip().startswith(':') for line in lines)
+    
+    # Check for balanced braces/brackets
+    brace_count = 0
+    bracket_count = 0
+    
+    for char in bref_content:
+        if char == '{':
+            brace_count += 1
+        elif char == '}':
+            brace_count -= 1
+        elif char == '[':
+            bracket_count += 1
+        elif char == ']':
+            bracket_count -= 1
+    
+    return has_type_def and brace_count == 0 and bracket_count == 0
