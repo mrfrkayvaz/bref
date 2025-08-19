@@ -17,7 +17,7 @@ def benchmark_json():
 
 def main():
     repeat = 10
-    number = 5
+    number = 2
 
     bref_time = timeit.repeat(benchmark_bref, repeat=repeat, number=number)
     json_time = timeit.repeat(benchmark_json, repeat=repeat, number=number)
