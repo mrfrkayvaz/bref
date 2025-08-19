@@ -108,17 +108,118 @@ fn parse_field(field_str: &str) -> Option<FieldDef> {
     })
 }
 
+/// Find a simple colon for key-value pairs (not inside quotes/braces/brackets)
+fn find_simple_colon(input: &str) -> Option<usize> {
+    let mut in_string = false;
+    let mut escape_next = false;
+    
+    for (i, ch) in input.char_indices() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+        
+        match ch {
+            '\\' if in_string => escape_next = true,
+            '"' => in_string = !in_string,
+            ':' if !in_string => {
+                // Make sure this looks like a simple key-value pair
+                // Key should be a simple identifier (no spaces, braces, etc.)
+                let key_part = input[..i].trim();
+                if key_part.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    
+    None
+}
+
+/// Check if all items are genuine key-value pairs from "key: value" syntax
+/// This is a heuristic to distinguish between:
+/// - Positional values: ["Bohemian Rhapsody", "5:55"] 
+/// - Key-value pairs: ["mood", "Epic", "rating", 5]
+fn check_if_all_key_value_pairs(items: &[DataValue]) -> bool {
+    if items.len() % 2 != 0 || items.is_empty() {
+        return false;
+    }
+    
+    // Check each pair to see if it looks like a real key-value pair
+    for pair in items.chunks(2) {
+        if let DataValue::Primitive(PrimitiveValue::String(key)) = &pair[0] {
+            // Key should be a simple identifier (alphanumeric + underscore)
+            // AND not a quoted string (which would be a positional value)
+            // This heuristic works because:
+            // - Real keys: mood, rating, release_date (simple identifiers)  
+            // - Positional strings: "Bohemian Rhapsody", "5:55" (have quotes/spaces/special chars)
+            if !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
+                return false;
+            }
+            // Additional check: keys are usually shorter
+            if key.len() > 20 {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+    
+    true
+}
+
+/// Find the main colon that separates value from type (not inside braces/brackets)
+fn find_main_colon(input: &str) -> Option<usize> {
+    let mut brace_count = 0;
+    let mut bracket_count = 0;
+    let mut in_string = false;
+    let mut escape_next = false;
+    let mut last_colon = None;
+    
+    for (i, ch) in input.char_indices() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+        
+        match ch {
+            '\\' if in_string => escape_next = true,
+            '"' => in_string = !in_string,
+            '{' if !in_string => brace_count += 1,
+            '}' if !in_string => brace_count -= 1,
+            '[' if !in_string => bracket_count += 1,
+            ']' if !in_string => bracket_count -= 1,
+            ':' if !in_string && brace_count == 0 && bracket_count == 0 => {
+                last_colon = Some(i);
+            }
+            _ => {}
+        }
+    }
+    
+    last_colon
+}
+
 /// Parse data using type definitions
 pub fn parse_data(input: &str, type_defs: &TypeDefs) -> Result<DataValue, String> {
     let input = input.trim();
     
     // Check if it's a typed value (e.g., "value: type" or "[...]: type")
-    if let Some(colon_pos) = input.rfind(':') {
+    // Find the rightmost colon that's not inside braces/brackets
+    if let Some(colon_pos) = find_main_colon(input) {
         let value_part = input[..colon_pos].trim();
         let type_name = input[colon_pos+1..].trim();
         
+        // Check if it's a predefined type
         if let Some(field_defs) = type_defs.get(type_name) {
             return parse_typed_value(value_part, field_defs, type_defs);
+        }
+        
+        // Check if it's an inline type definition (e.g., "{ title, duration }")
+        if type_name.starts_with('{') && type_name.ends_with('}') {
+            let fields_content = &type_name[1..type_name.len()-1];
+            let inline_field_defs = parse_fields(fields_content);
+            return parse_typed_value(value_part, &inline_field_defs, type_defs);
         }
     }
     
@@ -189,41 +290,62 @@ fn parse_array_items(content: &str, type_defs: &TypeDefs) -> Result<Vec<DataValu
     Ok(items)
 }
 
-/// Parse object items
+/// Parse object items (comma-separated values)
 fn parse_object_items(content: &str, type_defs: &TypeDefs) -> Result<Vec<DataValue>, String> {
     let mut items = Vec::new();
     let mut current_item = String::new();
     let mut brace_count = 0;
     let mut bracket_count = 0;
+    let mut in_string = false;
+    let mut escape_next = false;
     
     for ch in content.chars() {
+        if escape_next {
+            current_item.push(ch);
+            escape_next = false;
+            continue;
+        }
+        
         match ch {
-            '{' => {
+            '\\' if in_string => {
+                escape_next = true;
+                current_item.push(ch);
+            }
+            '"' => {
+                in_string = !in_string;
+                current_item.push(ch);
+            }
+            '{' if !in_string => {
                 brace_count += 1;
                 current_item.push(ch);
             }
-            '}' => {
+            '}' if !in_string => {
                 brace_count -= 1;
                 current_item.push(ch);
             }
-            '[' => {
+            '[' if !in_string => {
                 bracket_count += 1;
                 current_item.push(ch);
             }
-            ']' => {
+            ']' if !in_string => {
                 bracket_count -= 1;
                 current_item.push(ch);
             }
-            ',' => {
-                if brace_count == 0 && bracket_count == 0 {
-                    let item = current_item.trim();
-                    if !item.is_empty() {
+            ',' if !in_string && brace_count == 0 && bracket_count == 0 => {
+                let item = current_item.trim();
+                if !item.is_empty() {
+                    // Check if this is a key-value pair (e.g., "mood: Epic")
+                    if let Some(colon_pos) = find_simple_colon(item) {
+                        let key = item[..colon_pos].trim().to_string();
+                        let value = item[colon_pos+1..].trim();
+                        items.push(DataValue::Primitive(PrimitiveValue::String(key)));
+                        items.push(parse_data(value, type_defs)?);
+                    } else {
+                        // Use parse_data for nested structures, not just primitives
                         items.push(parse_data(item, type_defs)?);
                     }
-                    current_item.clear();
-                } else {
-                    current_item.push(ch);
                 }
+                current_item.clear();
             }
             _ => current_item.push(ch),
         }
@@ -232,7 +354,16 @@ fn parse_object_items(content: &str, type_defs: &TypeDefs) -> Result<Vec<DataVal
     // Add the last item
     let item = current_item.trim();
     if !item.is_empty() {
-        items.push(parse_data(item, type_defs)?);
+        // Check if this is a key-value pair (e.g., "mood: Epic")
+        if let Some(colon_pos) = find_simple_colon(item) {
+            let key = item[..colon_pos].trim().to_string();
+            let value = item[colon_pos+1..].trim();
+            items.push(DataValue::Primitive(PrimitiveValue::String(key)));
+            items.push(parse_data(value, type_defs)?);
+        } else {
+            // Use parse_data for nested structures, not just primitives
+            items.push(parse_data(item, type_defs)?);
+        }
     }
     
     Ok(items)
@@ -252,17 +383,42 @@ fn parse_typed_value(value_part: &str, field_defs: &[FieldDef], type_defs: &Type
         for item in array_items {
             match item {
                 DataValue::Object(items) => {
-                    // Create a named object by mapping field names to values
-                    let mut named_object = Vec::new();
-                    for (i, field_def) in field_defs.iter().enumerate() {
-                        if i < items.len() {
-                            let typed_value = apply_field_type(&items[i], field_def, type_defs)?;
-                            // Create key-value pair
-                            named_object.push(DataValue::Primitive(PrimitiveValue::String(field_def.name.clone())));
-                            named_object.push(typed_value);
+                    // Check if all items are key-value pairs (schema override case)
+                    let all_key_value_pairs = check_if_all_key_value_pairs(&items);
+                    
+                    if all_key_value_pairs {
+                        // All items are key-value pairs, ignore schema and use them directly
+                        typed_items.push(DataValue::Object(items));
+                    } else {
+                        // Create a named object by mapping field names to values
+                        let mut named_object = Vec::new();
+                        let mut item_index = 0;
+                        
+                        // Process defined fields first
+                        for field_def in field_defs.iter() {
+                            if item_index < items.len() {
+                                let typed_value = apply_field_type(&items[item_index], field_def, type_defs)?;
+                                // Create key-value pair
+                                named_object.push(DataValue::Primitive(PrimitiveValue::String(field_def.name.clone())));
+                                named_object.push(typed_value);
+                                item_index += 1;
+                            }
                         }
+                        
+                        // Process any remaining key-value pairs
+                        while item_index + 1 < items.len() {
+                            if let DataValue::Primitive(PrimitiveValue::String(_)) = &items[item_index] {
+                                // This looks like a key-value pair
+                                named_object.push(items[item_index].clone());
+                                named_object.push(items[item_index + 1].clone());
+                                item_index += 2;
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        typed_items.push(DataValue::Object(named_object));
                     }
-                    typed_items.push(DataValue::Object(named_object));
                 }
                 _ => {
                     return Err("Array items must be objects when using typed arrays".to_string());
@@ -272,17 +428,47 @@ fn parse_typed_value(value_part: &str, field_defs: &[FieldDef], type_defs: &Type
         return Ok(DataValue::Array(typed_items));
     }
     
-    // Parse as single object
-    let items = parse_object_items(value_part, type_defs)?;
+    // Parse as single object - remove braces first
+    let content = if value_part.starts_with('{') && value_part.ends_with('}') {
+        &value_part[1..value_part.len()-1]
+    } else {
+        value_part
+    };
+    let items = parse_object_items(content, type_defs)?;
+    
+    // Check if all items are key-value pairs (schema override case)
+    // A real key-value pair should come from "key: value" syntax in source
+    let all_key_value_pairs = check_if_all_key_value_pairs(&items);
+    
+    if all_key_value_pairs {
+        // All items are key-value pairs, ignore schema and use them directly
+        return Ok(DataValue::Object(items));
+    }
     
     // Create a named object by mapping field names to values
     let mut named_object = Vec::new();
-    for (i, field_def) in field_defs.iter().enumerate() {
-        if i < items.len() {
-            let typed_value = apply_field_type(&items[i], field_def, type_defs)?;
+    let mut item_index = 0;
+    
+    // Process defined fields first
+    for field_def in field_defs.iter() {
+        if item_index < items.len() {
+            let typed_value = apply_field_type(&items[item_index], field_def, type_defs)?;
             // Create key-value pair
             named_object.push(DataValue::Primitive(PrimitiveValue::String(field_def.name.clone())));
             named_object.push(typed_value);
+            item_index += 1;
+        }
+    }
+    
+    // Process any remaining key-value pairs
+    while item_index + 1 < items.len() {
+        if let DataValue::Primitive(PrimitiveValue::String(_)) = &items[item_index] {
+            // This looks like a key-value pair
+            named_object.push(items[item_index].clone());
+            named_object.push(items[item_index + 1].clone());
+            item_index += 2;
+        } else {
+            break;
         }
     }
     
@@ -295,19 +481,73 @@ fn apply_field_type(value: &DataValue, field_def: &FieldDef, type_defs: &TypeDef
         FieldKind::Primitive => Ok(value.clone()),
         FieldKind::Object => {
             if let Some(type_name) = &field_def.type_name {
+                // Check if it's a predefined type
                 if let Some(nested_field_defs) = type_defs.get(type_name) {
                     match value {
                         DataValue::Object(items) => {
                             // Apply the nested type to this object
                             let mut named_object = Vec::new();
-                            for (i, nested_field_def) in nested_field_defs.iter().enumerate() {
-                                if i < items.len() {
-                                    let typed_value = apply_field_type(&items[i], nested_field_def, type_defs)?;
+                            let mut item_index = 0;
+                            
+                            // Process defined fields first
+                            for nested_field_def in nested_field_defs.iter() {
+                                if item_index < items.len() {
+                                    let typed_value = apply_field_type(&items[item_index], nested_field_def, type_defs)?;
                                     // Create key-value pair
                                     named_object.push(DataValue::Primitive(PrimitiveValue::String(nested_field_def.name.clone())));
                                     named_object.push(typed_value);
+                                    item_index += 1;
                                 }
                             }
+                            
+                            // Process any remaining key-value pairs
+                            while item_index + 1 < items.len() {
+                                if let DataValue::Primitive(PrimitiveValue::String(_)) = &items[item_index] {
+                                    named_object.push(items[item_index].clone());
+                                    named_object.push(items[item_index + 1].clone());
+                                    item_index += 2;
+                                } else {
+                                    break;
+                                }
+                            }
+                            
+                            Ok(DataValue::Object(named_object))
+                        }
+                        _ => Ok(value.clone())
+                    }
+                }
+                // Check if it's an inline type definition (e.g., "{ age }")
+                else if type_name.starts_with('{') && type_name.ends_with('}') {
+                    let fields_content = &type_name[1..type_name.len()-1];
+                    let inline_field_defs = parse_fields(fields_content);
+                    match value {
+                        DataValue::Object(items) => {
+                            // Apply the inline type to this object
+                            let mut named_object = Vec::new();
+                            let mut item_index = 0;
+                            
+                            // Process defined fields first
+                            for nested_field_def in inline_field_defs.iter() {
+                                if item_index < items.len() {
+                                    let typed_value = apply_field_type(&items[item_index], nested_field_def, type_defs)?;
+                                    // Create key-value pair
+                                    named_object.push(DataValue::Primitive(PrimitiveValue::String(nested_field_def.name.clone())));
+                                    named_object.push(typed_value);
+                                    item_index += 1;
+                                }
+                            }
+                            
+                            // Process any remaining key-value pairs
+                            while item_index + 1 < items.len() {
+                                if let DataValue::Primitive(PrimitiveValue::String(_)) = &items[item_index] {
+                                    named_object.push(items[item_index].clone());
+                                    named_object.push(items[item_index + 1].clone());
+                                    item_index += 2;
+                                } else {
+                                    break;
+                                }
+                            }
+                            
                             Ok(DataValue::Object(named_object))
                         }
                         _ => Ok(value.clone())
@@ -330,14 +570,30 @@ fn apply_field_type(value: &DataValue, field_def: &FieldDef, type_defs: &TypeDef
                                     DataValue::Object(obj_items) => {
                                         // Apply the element type to each array item
                                         let mut named_object = Vec::new();
-                                        for (i, element_field_def) in element_field_defs.iter().enumerate() {
-                                            if i < obj_items.len() {
-                                                let typed_value = apply_field_type(&obj_items[i], element_field_def, type_defs)?;
+                                        let mut item_index = 0;
+                                        
+                                        // Process defined fields first
+                                        for element_field_def in element_field_defs.iter() {
+                                            if item_index < obj_items.len() {
+                                                let typed_value = apply_field_type(&obj_items[item_index], element_field_def, type_defs)?;
                                                 // Create key-value pair
                                                 named_object.push(DataValue::Primitive(PrimitiveValue::String(element_field_def.name.clone())));
                                                 named_object.push(typed_value);
+                                                item_index += 1;
                                             }
                                         }
+                                        
+                                        // Process any remaining key-value pairs
+                                        while item_index + 1 < obj_items.len() {
+                                            if let DataValue::Primitive(PrimitiveValue::String(_)) = &obj_items[item_index] {
+                                                named_object.push(obj_items[item_index].clone());
+                                                named_object.push(obj_items[item_index + 1].clone());
+                                                item_index += 2;
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        
                                         typed_items.push(DataValue::Object(named_object));
                                     }
                                     _ => typed_items.push(item.clone())
@@ -392,14 +648,14 @@ pub fn parse_primitive_value(input: &str) -> PrimitiveValue {
     PrimitiveValue::String(value)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum DataValue {
     Primitive(PrimitiveValue),
     Object(Vec<DataValue>),
     Array(Vec<DataValue>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum PrimitiveValue {
     String(String),
     Integer(i64),

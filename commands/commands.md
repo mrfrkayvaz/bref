@@ -385,9 +385,9 @@ There will be two main functions defined here:
 
 parse: this function converts a Bref string into Rust dict and list objects.
 
-toJSON: this function will remain empty for now.
+to_json: this function will remain empty for now.
 
-toBREF: this function will remain empty for now.
+to_bref: this function will remain empty for now.
 
 ## Tasks
 
@@ -395,7 +395,7 @@ You will go through these tasks step by step. I will assign a number to each tas
 
 ### Task 1
 
-The first task is to implement logic in the toJSON function that identifies three key components from the incoming Bref data:
+The first task is to implement logic in the to_json function that identifies three key components from the incoming Bref data:
 
 type_defs – stores all type definitions.
 
@@ -542,7 +542,7 @@ The main logic is as follows:
 
 Our `parse` function already converts a given Bref string into Rust data structures (`dict` / `list`).  
 
-Now the goal is to update the implementation of `bref.toJSON`.  
+Now the goal is to update the implementation of `bref.to_json`.  
 
 - The incoming Bref string should first be passed through the `parse` function.  
 - Then, the resulting Rust structure should be converted into a JSON string (using `json.dumps`).  

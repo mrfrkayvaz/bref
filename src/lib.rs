@@ -120,7 +120,7 @@ fn convert_primitive_to_python(primitive: PrimitiveValue, py: Python<'_>) -> PyR
 }
 
 #[pyfunction]
-fn toJSON(s: &str, py: Python<'_>) -> PyResult<String> {
+fn to_json(s: &str, py: Python<'_>) -> PyResult<String> {
     // sadece veriyi parse et
     let type_defs = parse_type_definitions(s);
 
@@ -152,6 +152,6 @@ fn toJSON(s: &str, py: Python<'_>) -> PyResult<String> {
 #[pymodule]
 fn brefpy(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse, m)?)?;
-    m.add_function(wrap_pyfunction!(toJSON, m)?)?;
+    m.add_function(wrap_pyfunction!(to_json, m)?)?;
     Ok(())
 }

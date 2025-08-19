@@ -16,8 +16,8 @@ def benchmark_json():
 
 
 def main():
-    repeat = 5
-    number = 2
+    repeat = 10
+    number = 5
 
     bref_time = timeit.repeat(benchmark_bref, repeat=repeat, number=number)
     json_time = timeit.repeat(benchmark_json, repeat=repeat, number=number)
@@ -26,6 +26,7 @@ def main():
     json_min = min(json_time) / number
 
     print("=== Benchmark Results ===")
+    print(f"Number: {number}", f"Repeat: {repeat}")
     print(f"Bref parse (min per run): {bref_min:.8f} s")
     print(f"JSON parse (min per run): {json_min:.8f} s")
 

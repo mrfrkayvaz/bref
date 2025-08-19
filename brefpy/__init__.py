@@ -2,6 +2,6 @@
 BREF - A data format parser
 """
 
-from .bref import parse, toJSON
+from .brefpy import parse, to_json
 
-__all__ = ['parse', 'toJSON']
+__all__ = ['parse', 'to_json']

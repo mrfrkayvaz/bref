@@ -1,0 +1,8 @@
+:person { name, age, height, is_active, email, preferences:preferences, scores }
+:preferences { theme, language }
+
+[
+  { "John Doe", 30, 175.5, true, null, { "dark", "en" }, [ 85, 92, 78 ] },
+  { "Jane Smith", 25, 162.0, false, "jane@example.com", { "light", "tr" }, [ 95, 88, 91 ] },
+  { "Bob Wilson", 35, 180.2, true, null, { "auto", "de" } , [ 72, 85, 90 ] }
+]: person

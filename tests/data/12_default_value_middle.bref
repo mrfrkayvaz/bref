@@ -1,9 +1,0 @@
-:person { name, age: 25, city: "Unknown", address:address, is_active: true }
-:address { street, postal_code }
-
-[
-  {
-    "John Doe", .,.,
-    { "Main St", "12345" }
-  }
-]: person
