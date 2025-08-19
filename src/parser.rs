@@ -1,21 +1,6 @@
 use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum FieldKind {
-    Primitive,
-    Object,
-    Array,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FieldDef {
-    pub name: String,
-    pub type_name: Option<String>,
-    pub kind: FieldKind,
-}
-
-pub type TypeDefs = HashMap<String, Vec<FieldDef>>;
+use crate::types::{FieldKind, FieldDef, TypeDefs, DataValue, PrimitiveValue};
+use crate::utils::{find_simple_colon, check_if_all_key_value_pairs, find_main_colon, parse_primitive_value};
 
 /// Parse type definitions from Bref format
 pub fn parse_type_definitions(input: &str) -> TypeDefs {
@@ -108,97 +93,11 @@ fn parse_field(field_str: &str) -> Option<FieldDef> {
     })
 }
 
-/// Find a simple colon for key-value pairs (not inside quotes/braces/brackets)
-fn find_simple_colon(input: &str) -> Option<usize> {
-    let mut in_string = false;
-    let mut escape_next = false;
-    
-    for (i, ch) in input.char_indices() {
-        if escape_next {
-            escape_next = false;
-            continue;
-        }
-        
-        match ch {
-            '\\' if in_string => escape_next = true,
-            '"' => in_string = !in_string,
-            ':' if !in_string => {
-                // Make sure this looks like a simple key-value pair
-                // Key should be a simple identifier (no spaces, braces, etc.)
-                let key_part = input[..i].trim();
-                if key_part.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                    return Some(i);
-                }
-            }
-            _ => {}
-        }
-    }
-    
-    None
-}
 
-/// Check if all items are genuine key-value pairs from "key: value" syntax
-/// This is a heuristic to distinguish between:
-/// - Positional values: ["Bohemian Rhapsody", "5:55"] 
-/// - Key-value pairs: ["mood", "Epic", "rating", 5]
-fn check_if_all_key_value_pairs(items: &[DataValue]) -> bool {
-    if items.len() % 2 != 0 || items.is_empty() {
-        return false;
-    }
-    
-    // Check each pair to see if it looks like a real key-value pair
-    for pair in items.chunks(2) {
-        if let DataValue::Primitive(PrimitiveValue::String(key)) = &pair[0] {
-            // Key should be a simple identifier (alphanumeric + underscore)
-            // AND not a quoted string (which would be a positional value)
-            // This heuristic works because:
-            // - Real keys: mood, rating, release_date (simple identifiers)  
-            // - Positional strings: "Bohemian Rhapsody", "5:55" (have quotes/spaces/special chars)
-            if !key.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                return false;
-            }
-            // Additional check: keys are usually shorter
-            if key.len() > 20 {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-    
-    true
-}
 
-/// Find the main colon that separates value from type (not inside braces/brackets)
-fn find_main_colon(input: &str) -> Option<usize> {
-    let mut brace_count = 0;
-    let mut bracket_count = 0;
-    let mut in_string = false;
-    let mut escape_next = false;
-    let mut last_colon = None;
-    
-    for (i, ch) in input.char_indices() {
-        if escape_next {
-            escape_next = false;
-            continue;
-        }
-        
-        match ch {
-            '\\' if in_string => escape_next = true,
-            '"' => in_string = !in_string,
-            '{' if !in_string => brace_count += 1,
-            '}' if !in_string => brace_count -= 1,
-            '[' if !in_string => bracket_count += 1,
-            ']' if !in_string => bracket_count -= 1,
-            ':' if !in_string && brace_count == 0 && bracket_count == 0 => {
-                last_colon = Some(i);
-            }
-            _ => {}
-        }
-    }
-    
-    last_colon
-}
+
+
+
 
 /// Parse data using type definitions
 pub fn parse_data(input: &str, type_defs: &TypeDefs) -> Result<DataValue, String> {
@@ -281,7 +180,6 @@ fn parse_array_items(content: &str, type_defs: &TypeDefs) -> Result<Vec<DataValu
         }
     }
     
-    // Add the last item
     let item = current_item.trim();
     if !item.is_empty() {
         items.push(parse_data(item, type_defs)?);
@@ -334,14 +232,12 @@ fn parse_object_items(content: &str, type_defs: &TypeDefs) -> Result<Vec<DataVal
             ',' if !in_string && brace_count == 0 && bracket_count == 0 => {
                 let item = current_item.trim();
                 if !item.is_empty() {
-                    // Check if this is a key-value pair (e.g., "mood: Epic")
                     if let Some(colon_pos) = find_simple_colon(item) {
                         let key = item[..colon_pos].trim().to_string();
                         let value = item[colon_pos+1..].trim();
                         items.push(DataValue::Primitive(PrimitiveValue::String(key)));
                         items.push(parse_data(value, type_defs)?);
                     } else {
-                        // Use parse_data for nested structures, not just primitives
                         items.push(parse_data(item, type_defs)?);
                     }
                 }
@@ -351,17 +247,14 @@ fn parse_object_items(content: &str, type_defs: &TypeDefs) -> Result<Vec<DataVal
         }
     }
     
-    // Add the last item
     let item = current_item.trim();
     if !item.is_empty() {
-        // Check if this is a key-value pair (e.g., "mood: Epic")
         if let Some(colon_pos) = find_simple_colon(item) {
             let key = item[..colon_pos].trim().to_string();
             let value = item[colon_pos+1..].trim();
             items.push(DataValue::Primitive(PrimitiveValue::String(key)));
             items.push(parse_data(value, type_defs)?);
         } else {
-            // Use parse_data for nested structures, not just primitives
             items.push(parse_data(item, type_defs)?);
         }
     }
@@ -613,53 +506,4 @@ fn apply_field_type(value: &DataValue, field_def: &FieldDef, type_defs: &TypeDef
     }
 }
 
-/// Parse a primitive value
-pub fn parse_primitive_value(input: &str) -> PrimitiveValue {
-    let input = input.trim();
-    
-    // Boolean
-    if input == "true" {
-        return PrimitiveValue::Boolean(true);
-    }
-    if input == "false" {
-        return PrimitiveValue::Boolean(false);
-    }
-    
-    // Null
-    if input == "null" {
-        return PrimitiveValue::Null;
-    }
-    
-    // Number (integer or float)
-    if let Ok(int_val) = input.parse::<i64>() {
-        return PrimitiveValue::Integer(int_val);
-    }
-    if let Ok(float_val) = input.parse::<f64>() {
-        return PrimitiveValue::Float(float_val);
-    }
-    
-    // String (remove quotes if present)
-    let value = if input.starts_with('"') && input.ends_with('"') {
-        input[1..input.len()-1].to_string()
-    } else {
-        input.to_string()
-    };
-    
-    PrimitiveValue::String(value)
-}
 
-#[derive(Debug, Clone, Serialize)]
-pub enum DataValue {
-    Primitive(PrimitiveValue),
-    Object(Vec<DataValue>),
-    Array(Vec<DataValue>),
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub enum PrimitiveValue {
-    String(String),
-    Integer(i64),
-    Float(f64),
-    Boolean(bool),
-    Null,
-}
