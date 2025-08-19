@@ -40,3 +40,14 @@ htmlcov/
 # Mac / Linux özel
 .DS_Store
 Thumbs.db
+
+# Rust
+target/
+Cargo.lock
+**/*.rs.bk
+
+# Python wheels / builds
+*.egg-info/
+*.whl
+/build
+/dist
