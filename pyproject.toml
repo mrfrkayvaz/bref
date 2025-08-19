@@ -3,8 +3,8 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "bref"
-version = "0.1.1"
+name = "brefpy"
+version = "0.1.2"
 description = "A Python parser for the BREF data format with JSON output"
 readme = "README.md"
 license = {text = "MIT"}
@@ -37,7 +37,7 @@ dev = [
 ]
 
 [project.scripts]
-bref = "bref.cli:main"
+brefpy = "brefpy.cli:main"
 
 [tool.black]
 line-length = 88

@@ -1,12 +1,12 @@
 from pathlib import Path
-import bref
+import brefpy
 
 def main():
     bref_path = Path(__file__).parent / "data.bref"
     content = bref_path.read_text(encoding="utf-8")
     
     try:
-        result = bref.parse(content)
+        result = brefpy.parse(content)
         print(result["data"])
         
     except Exception as e:

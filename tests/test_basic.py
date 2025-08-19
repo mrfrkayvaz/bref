@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-import bref
+import brefpy
 from rich.console import Console
 from rich.syntax import Syntax
 
@@ -9,7 +9,7 @@ console = Console()
 def run_test(file_name, expected):
     file_path = Path(__file__).parent / "data" / file_name
     content = file_path.read_text(encoding="utf-8")
-    result = bref.toJSON(content)
+    result = brefpy.toJSON(content)
 
     if result != expected:
         console.print(f"[bold red]{file_name} failed[/bold red]")

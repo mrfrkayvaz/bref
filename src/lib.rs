@@ -150,7 +150,7 @@ fn toJSON(s: &str, py: Python<'_>) -> PyResult<String> {
 }
 
 #[pymodule]
-fn bref(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn brefpy(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse, m)?)?;
     m.add_function(wrap_pyfunction!(toJSON, m)?)?;
     Ok(())
