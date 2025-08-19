@@ -7,7 +7,7 @@ import sys
 import argparse
 import json
 from pathlib import Path
-from .converter import parse, toJSON, toBREF
+import bref
 
 
 def main():
@@ -63,7 +63,7 @@ def main():
             print(f"Content to parse: {repr(content[:100])}...", file=sys.stderr)
         
         # Parse BREF content and convert to JSON
-        result = toJSON(content)
+        result = bref.toJSON(content)
         
         if args.pretty:
             # Parse the JSON string and pretty print it

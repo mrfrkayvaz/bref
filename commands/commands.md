@@ -1,7 +1,7 @@
-# Bref Python Parser
+# Bref Rust Parser
 
-This document describes the development of a Python parser for the Bref data format.
-The parser should read data in Bref format and produce standard Python structures: arrays are converted into lists, and objects are converted into dictionaries.
+This document describes the development of a Rust parser for the Bref data format.
+The parser should read data in Bref format and produce standard Rust structures: arrays are converted into lists, and objects are converted into dictionaries.
 To help you understand the Bref format, I provide the corresponding JSON representations under the code examples.
 
 ## Goals
@@ -383,7 +383,7 @@ The bref folder will be our working directory. Inside this folder, all operation
 
 There will be two main functions defined here:
 
-parse: this function converts a Bref string into Python dict and list objects.
+parse: this function converts a Bref string into Rust dict and list objects.
 
 toJSON: this function will remain empty for now.
 
@@ -391,7 +391,7 @@ toBREF: this function will remain empty for now.
 
 ## Tasks
 
-You will go through these tasks step by step. I will assign a number to each task. Your job is to carefully understand the task, ask questions if anything is unclear, and if you are completely confident, proceed to implement it. Perform these implementations using Python.
+You will go through these tasks step by step. I will assign a number to each task. Your job is to carefully understand the task, ask questions if anything is unclear, and if you are completely confident, proceed to implement it. Perform these implementations using Rust.
 
 ### Task 1
 
@@ -409,12 +409,53 @@ At this stage, we are not processing actual data objects yet. The parser should 
 :band { name, country }
 ```
 
-**Python**
-```python
-type_defs = {
-  "song": ["title", "duration", "genre", ("album", "album", FieldType.OBJECT), "streams", "is_favorite"],
-  "album": ["title", "year", ("band", "band"), ("tracks", "track", FieldType.ARRAY)],
-  "band": ["name", "country"]
+```rust
+use std::collections::HashMap;
+
+#[derive(Debug)]
+enum FieldKind {
+    Primitive,
+    Object,
+    Array,
+}
+
+#[derive(Debug)]
+struct FieldDef {
+    name: &'static str,             // alanın adı
+    type_name: Option<&'static str>, // eğer Object/Array ise referans tipi
+    kind: FieldKind,                // Primitive / Object / Array
+}
+
+type TypeDefs = HashMap<&'static str, Vec<FieldDef>>;
+
+fn get_type_defs() -> TypeDefs {
+  let mut defs = HashMap::new();
+
+  // song tipi
+  defs.insert("song", vec![
+    FieldDef { name: "title", type_name: None, kind: FieldKind::Primitive },
+    FieldDef { name: "duration", type_name: None, kind: FieldKind::Primitive },
+    FieldDef { name: "genre", type_name: None, kind: FieldKind::Primitive },
+    FieldDef { name: "album", type_name: Some("album"), kind: FieldKind::Object },
+    FieldDef { name: "streams", type_name: None, kind: FieldKind::Primitive },
+    FieldDef { name: "is_favorite", type_name: None, kind: FieldKind::Primitive },
+  ]);
+
+  // album tipi
+  defs.insert("album", vec![
+    FieldDef { name: "title", type_name: None, kind: FieldKind::Primitive },
+    FieldDef { name: "year", type_name: None, kind: FieldKind::Primitive },
+    FieldDef { name: "band", type_name: Some("band"), kind: FieldKind::Object },
+    FieldDef { name: "tracks", type_name: Some("track"), kind: FieldKind::Array },
+  ]);
+
+  // band tipi
+  defs.insert("band", vec![
+    FieldDef { name: "name", type_name: None, kind: FieldKind::Primitive },
+    FieldDef { name: "country", type_name: None, kind: FieldKind::Primitive },
+  ]);
+
+  defs
 }
 ```
 
@@ -428,9 +469,9 @@ The main logic is as follows:
 
  - There should not be any item without a key definition. If such a case exists, the parser must raise an error.
 
- - If the data is an object, the output should be a Python dict.
+ - If the data is an object, the output should be a Rust dict.
 
- - If the data is an array, the output should be a Python list.
+ - If the data is an array, the output should be a Rust list.
 
 **Bref**
 
@@ -499,11 +540,11 @@ The main logic is as follows:
 
 ### Task 3
 
-Our `parse` function already converts a given Bref string into Python data structures (`dict` / `list`).  
+Our `parse` function already converts a given Bref string into Rust data structures (`dict` / `list`).  
 
 Now the goal is to update the implementation of `bref.toJSON`.  
 
 - The incoming Bref string should first be passed through the `parse` function.  
-- Then, the resulting Python structure should be converted into a JSON string (using `json.dumps`).  
+- Then, the resulting Rust structure should be converted into a JSON string (using `json.dumps`).  
 
-In short: **Bref string → `parse()` → Python dict/list → JSON string**.
+In short: **Bref string → `parse()` → Rust dict/list → JSON string**.

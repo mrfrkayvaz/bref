@@ -9,7 +9,6 @@ def benchmark_bref():
     data = content.read_text(encoding="utf-8")
     bref.parse(data)
 
-
 def benchmark_json():
     content = Path(__file__).parent / "output.json"
     data = content.read_text(encoding="utf-8")

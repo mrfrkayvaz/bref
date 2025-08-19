@@ -1,17 +1,17 @@
 :song { title, duration, genre, album:album, streams, is_favorite }
 :album { title, year, band:band, tracks:track[] }
-:band { name, country }
 :track { title }
+:band { name, country }
 
 [
   {
     "Bohemian Rhapsody", "5:55", "Rock",
-    { "A Night at the Opera", 1975, { "Queen", "UK" }, [{"track 1"}, {"track 2"}] },
+    { "A Night at the Opera", 1975, { "Queen", "UK" }, [{"Love of My Life"}, {"You're My Best Friend"}] },
     1980000000, true
   },
   {
     "Smells Like Teen Spirit", "5:01", "Alternative Rock",
-    { "A Night at the Opera", 1975, { "Queen", "UK" }, [{"track 1"}, {"track 2"}] },
+    { "Nevermind", 1991, { "Nirvana", "USA" }, [{"In Bloom"}, {"Come As You Are"}] },
     300000, false
   }
 ]: song
