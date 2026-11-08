@@ -19,15 +19,19 @@ fn parse(s: &str, py: Python<'_>) -> PyResult<PyObject> {
     // Tip tanımlamalarını çıkar
     let type_defs = parse_type_definitions(s);
 
-    // Veri satırlarını filtrele
-    let data_lines: Vec<_> = s
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with(':'))
-        .collect();
+    // Veri satırlarını filtrele (allocation optimize edildi)
+    let mut data_str = String::new();
+    for line in s.lines().map(str::trim) {
+        if !line.is_empty() && !line.starts_with(':') {
+            if !data_str.is_empty() {
+                data_str.push('\n');
+            }
+            data_str.push_str(line);
+        }
+    }
 
     // Eğer veri yoksa sadece type_defs dön
-    if data_lines.is_empty() {
+    if data_str.is_empty() {
         let result = PyDict::new_bound(py);
         result.set_item("type_defs", convert_type_defs_to_python(type_defs, py)?)?;
         result.set_item("data", py.None())?;
@@ -35,7 +39,7 @@ fn parse(s: &str, py: Python<'_>) -> PyResult<PyObject> {
     }
 
     // Veriyi parse et
-    let data_result = parse_data(&data_lines.join("\n"), &type_defs);
+    let data_result = parse_data(&data_str, &type_defs);
 
     match data_result {
         Ok(data_value) => {
@@ -48,28 +52,32 @@ fn parse(s: &str, py: Python<'_>) -> PyResult<PyObject> {
     }
 }
 
-
-
 #[pyfunction]
 fn to_json(s: &str, py: Python<'_>) -> PyResult<String> {
-    // sadece veriyi parse et
+    // Tip tanımlamalarını çıkar
     let type_defs = parse_type_definitions(s);
 
-    let data_lines: Vec<_> = s
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with(':'))
-        .collect();
+    // Veri satırlarını filtrele (allocation optimize edildi)
+    let mut data_str = String::new();
+    for line in s.lines().map(str::trim) {
+        if !line.is_empty() && !line.starts_with(':') {
+            if !data_str.is_empty() {
+                data_str.push('\n');
+            }
+            data_str.push_str(line);
+        }
+    }
 
-    if data_lines.is_empty() {
+    if data_str.is_empty() {
         return Ok("null".to_string());
     }
 
-    let data_result = parse_data(&data_lines.join("\n"), &type_defs)
+    // Veriyi parse et
+    let data_result = parse_data(&data_str, &type_defs)
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
     let py_data = convert_data_value_to_python(data_result, py)?;
 
-    // JSON’a çevir
+    // Python tarafında JSON’a çevir
     let json_module = py.import_bound("json")?;
     let json_dumps = json_module.getattr("dumps")?;
     let kwargs = PyDict::new_bound(py);

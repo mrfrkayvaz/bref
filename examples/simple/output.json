@@ -1,0 +1,48 @@
+[
+  {
+    "title": "Bohemian Rhapsody",
+    "duration": "5:55",
+    "genre": "Rock",
+    "album": {
+      "title": "A Night at the Opera",
+      "year": 1975,
+      "band": {
+        "name": "Queen",
+        "country": "UK"
+      },
+      "tracks": [
+        {
+          "title": "Love of My Life"
+        },
+        {
+          "title": "You're My Best Friend"
+        }
+      ]
+    },
+    "streams": 1980000000,
+    "is_favorite": true
+  },
+  {
+    "title": "Smells Like Teen Spirit",
+    "duration": "5:01",
+    "genre": "Alternative Rock",
+    "album": {
+      "title": "Nevermind",
+      "year": 1991,
+      "band": {
+        "name": "Nirvana",
+        "country": "USA"
+      },
+      "tracks": [
+        {
+          "title": "In Bloom"
+        },
+        {
+          "title": "Come As You Are"
+        }
+      ]
+    },
+    "streams": 300000,
+    "is_favorite": false
+  }
+]
